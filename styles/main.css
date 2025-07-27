@@ -1,0 +1,108 @@
+@font-face {
+  font-display: swap; /* Check https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display for other options. */
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/source-code-pro-v30-latin-regular.woff2') format('woff2'); /* Chrome 36+, Opera 23+, Firefox 39+, Safari 12+, iOS 10+ */
+}
+
+@font-face {
+  font-display: swap;
+  font-family: 'Source Code Pro';
+  font-style: italic;
+  font-weight: 400;
+  src: url('/fonts/source-code-pro-v30-latin-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-display: swap;
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/source-code-pro-v30-latin-700.woff2') format('woff2');
+}
+
+:root {
+  --header-fonts: "Source Code Pro";
+  --fonts: "Source Code Pro";
+
+  --color-primary-dark: #021928;
+  --color-primary-mid: #4682b4;
+  --color-primary-light: #0b3f60;
+
+  --color-accent: #7eaba2;
+  --color-bg-light: #e8e8e8;
+  --color-bg-dark: #a8a8a8;
+  --color-font: #222;
+  --color-font-foreground: #fff;
+}
+
+html,body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+body {
+    font-family: var(--header-fonts);
+    font-weight: 400;
+    font-size: 16px;
+    margin: 0;
+    padding: 1em;
+    background: var(--color-bg-light);
+    color: var(--color-font);
+}
+
+header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+#about-redirect-item {
+    align-self: end;
+}
+
+footer {
+    display: flex;
+    margin-top: auto;
+    align-items: center;
+    justify-content: center;
+}
+
+a {
+    text-decoration: none;
+    color: var(--color-primary-mid);
+    cursor: pointer;
+}
+
+a:hover {
+    color: var(--color-accent);
+}
+
+h1 {
+    font-size: 2em;
+}
+
+h1,h2,h3 {
+    font-weight: 700;
+}
+
+p {
+    font-family: var(--fonts);
+    line-height: 24px;
+}
+
+ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+#title-redirect, #about-redirect {
+    color: var(--color-primary-dark);
+}
+
+#title-redirect:hover, #about-redirect:hover {
+    color: var(--color-accent);
+}

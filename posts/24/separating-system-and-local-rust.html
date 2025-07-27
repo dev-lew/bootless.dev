@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+    <head>
+      <!--#include virtual="/ssi/head-preamble.html"-->
+      <!--#include virtual="/ssi/highlight.html"-->
+
+      <link rel="stylesheet" href="/styles/modern-normalize.css">
+      <link rel="stylesheet" href="/styles/main.css">
+      <link rel="stylesheet" href="/styles/posts.css">
+    </head>
+    <body>
+      <!--#include virtual="/ssi/header.html"-->
+
+      <h2>separating system and local rust</h2>
+      <div id="main">
+        <p>
+          I recently installed Rust on my Gentoo machine and was interested in creating
+          two separate installations: one for the system to build Rust-based packages like
+          Firefox, and one for local development. Separating the installations in this way makes
+          a lot of sense to me, since this is what Gentoo forces you to do with Python installations.
+        </p>
+        <p>
+          The recommended tool to manage rust installations is rustup. If there is an existing installation,
+          (e.g. from portage) rustup will complain and refuse to install anything without an override. rustup
+          recommends to "link" your system installation so rustup can learn about it. If you do this, you can instruct
+          rustup to build sources with either your system or local toolchains. I wasn't interested in doing this,
+          since I wasn't sure if rustup would attempt to update things behind the package manager's back.
+        </p>
+        <p>
+          rustup installs all binaries in $HOME/.cargo/bin by default. So in order to have isolation we just have
+          to play with the paths. Gentoo's documentation shows you how to do this with bash, but I'm using fish so
+          the solution was marginally different.
+        </p>
+        <p>
+          I added the following function to ~/.config/fish/functions:
+        </p>
+        <pre><code>
+function localrust --description 'Use a local installation of rust for this command'
+    set -lp PATH $HOME/.cargo/bin
+    $argv
+end
+        </code></pre>
+        <p>
+          It prepends $HOME/.cargo/bin to the path before executing any command passed to the function.
+          The important part here is the <code>-l</code> flag to make the change local to the function's
+          scope. This way, the only way to access local binaries (including rustup itself) is with
+          <code>localrust &lt;command&gt;</code>.
+        </p>
+      </div>
+      <!--#include virtual="/ssi/footer.html"-->
+    </body>
+
+</html>

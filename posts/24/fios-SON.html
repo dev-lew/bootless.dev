@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+  <head>
+    <!--#include virtual="/ssi/head-preamble.html"  -->
+    <link rel="stylesheet" href="/styles/modern-normalize.css">
+    <link rel="stylesheet" href="/styles/main.css">
+    <link rel="stylesheet" href="/styles/posts.css">
+  </head>
+  <body>
+    <!--#include virtual="/ssi/header.html"  -->
+    <h2>Fios SON</h2>
+    <div id="main">
+      <p>
+	I'm sure most of us are aware that major ISPs are scammers, but I recently encountered something
+	particularly egregious: enter Fios Self-Organizing Network (SON).
+      </p>
+      <p>
+	I recently built a PC for my friend, and network speed tests on the computer
+	were showing 20 mbps download and upload. Surely this couldn't be the fault of my expert PC
+	building skills, so I (correctly) pointed fingers at their Fios wifi router.
+      </p>
+      <p>
+	I'm not very familiar with the features of modern Fios deployments, and was suprised when
+	I noticed only one SSID being broadcast, when the router clearly stated it supported three separate
+	bands (2.4, two 5 GHz). Browsing the router's settings, I noticed the SON feature. Verizon states
+	"Self-Organizing Networks significantly improve Wi-Fi performance by automatically identifying and
+	fixing Wi-Fi problems. Connected devices will move seamlessly between 2.4 GHz and 5 GHz Wi-Fi signals..."
+	Enemy spotted. This seems like a cool feature, but in using it you trust Verizon to have implemented
+	it well. I'm not really a networking guy, but to me this seems like a hard problem that's difficult to
+	get right, and even more difficult if you are Verizon.
+      </p>
+      <p>
+	This feature collapses the bands and only shows one SSID, so that cleared my confusion on that front. I looked
+	at the wifi connection details on the PC and it was connected to the 2.4 GHz band. Superior Verizon network
+	engineering at its finest. From what I understand, the 2.4GHz band is inferior to the 5GHz band in basically every way,
+	since it provides less channels for devices to communicate on. In a house with a lot of devices, they constantly
+	fight for the limited number of channels creating interference and slowdowns.
+      </p>
+      <p>
+	So after I turned it off, the three SSIDs were displayed and after connecting the PC to a 5GHz band, speeds increased
+	to over 200 mbps.
+      </p>
+      <p>
+	It bothers me that this option is on by default. Sure it makes network management simpler, users only have to
+	select one network to connect to. But if simple means slower, it's just not worth it.
+      </p>
+      <p>
+	If you live in a space with not many devices, you probably will never encounter drastic speed disparities like this
+	and leaving the setting on is fine. Either way that's my PSA.
+      </p>
+    </div>
+    <!--#include virtual="/ssi/footer.html"-->
+  </body>
+</html>

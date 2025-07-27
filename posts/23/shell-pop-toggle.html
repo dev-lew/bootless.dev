@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+    <head>
+      <!--#include virtual="/ssi/head-preamble.html"-->
+      <!--#include virtual="/ssi/highlight.html"-->
+
+      <link rel="stylesheet" href="/styles/modern-normalize.css">
+      <link rel="stylesheet" href="/styles/main.css">
+      <link rel="stylesheet" href="/styles/posts.css">
+
+    </head>
+    <body>
+      <!--#include virtual="/ssi/header.html"-->
+
+      <h2>using shell-pop to toggle between eshell and ansi-term</h2>
+      <div id="main">
+	<p>
+	  I use <a href="https://github.com/kyagi/shell-pop-el">shell-pop</a> to work with the terminal in emacs.
+	  Binding the shell-pop function to a key (I use SPC ') creates a shell buffer on the bottom portion of the screen.
+	  shell-pop supports eshell, term/ansi-term, and shell out of the box, but it can only be configured to use
+	  one per invocation.
+	</p>
+	<p>
+	  I recently got the urge to learn eshell, so I changed the shell-pop config accordingly ... and was annoyed.
+	  There were still times I wanted to use ansi-term, and I was forced to resort to <code>M-x ansi-term</code>
+	  which of course lacks the functionality of shell-pop. In the grand scheme of things,
+	  this isn't a big deal, but I was willing to spend a silly amount of time writing a function to
+	  extend shell-pop to be able to use both:
+	</p>
+	    <pre><code>
+(defun choose-shell ()
+  (interactive)
+  (require 'helm)
+
+  (helm :sources
+	(helm-build-sync-source "Select Shell"
+	  :candidates '("eshell" "ansi-term"))
+	:buffer "*Select Shell"))
+
+(defun configure-shell-pop ()
+  (interactive)
+  (require 'shell-pop)
+
+   (let ((shell-choice (choose-shell)))
+
+   (cond
+   ((equal shell-choice "ansi-term")
+    (setq shell-pop-shell-type
+	  (quote ("ansi-term" "*ansi-term*"
+	     (lambda () (ansi-term shell-pop-term-shell))))))
+   ((equal shell-choice "eshell")
+    (setq shell-pop-shell-type
+	  (quote ("eshell" "*eshell*"
+	     (lambda () (eshell))))))))
+   (shell-pop--set-shell-type 'shell-pop-shell-type shell-pop-shell-type))
+	    </code></pre>
+	<p>
+	  <code>choose-shell</code> opens a helm buffer allowing the user to choose ansi-term or eshell, and that
+	  choice is stored in the <code>shell-choice</code> variable in the <code>configure-shell-pop</code> function.
+	  Depending on the choice, we set the <code>shell-pop-shell-type</code> variable to the appropriate shell.
+	  Following this function (which I bind to SPC ") any subsequent invocations of <code>shell-pop</code>
+	  will use the chosen shell.
+	</p>
+	<p>
+	  This setup does not delete the previous shell buffer if you switch while having one open, so you can
+	  keep both in your buffer ring. Hopefully this can be of use to fellow shell-pop users!
+	</p>
+      </div>
+      <!--#include virtual="/ssi/footer.html"-->
+    </body>
+</html>
