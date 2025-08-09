@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+
+<head>
+  <!--#include virtual="/ssi/head-preamble.html"  -->
+  <link rel="stylesheet" href="/styles/modern-normalize.css">
+  <link rel="stylesheet" href="/styles/main.css">
+  <link rel="stylesheet" href="/styles/table.css">
+  <link rel="stylesheet" href="/styles/posts.css">
+</head>
+
+<body>
+  <!--#include virtual="/ssi/header.html"  -->
+  <h2>a paper review of RunD</h2>
+  <div id="main">
+    <p>
+      <a href="https://www.usenix.org/system/files/atc22-li-zijun-rund.pdf">RunD</a> (ATC 22)
+      is a paper describing improvements to an existing "secure container" runtime called
+      <a href="https://katacontainers.io/">Kata Containers</a>, with respect to serverless
+      computing. It's probably best to clarify some of the jargon here.
+    </p>
+
+    <table>
+      <tr>
+        <td>Serverless</td>
+        <td>A paradigm of cloud computing where you don't have to administer servers.
+          Users generally upload code as event based "functions".
+        </td>
+      </tr>
+      <tr>
+        <td>Container</td>
+        <td>An isolated and restricted box for running processes. For us, they are a spec
+          (from <a href="https://github.com/opencontainers/image-spec">OCI</a>)
+          and not an implementation.
+        </td>
+      </tr>
+      <tr>
+        <td>Container Runtime</td>
+        <td>Software that implements a container spec and launches processes in them</td>
+      </tr>
+      <tr>
+        <td>Secure Container</td>
+        <td>Unofficial term used by the authors to describe containers that are built
+          with (usually) microVMs. They run on a guest operating system.
+        </td>
+      </tr>
+      <tr>
+        <td>MicroVM</td>
+        <td>Lightweight virtual machines, term coined by the AWS Firecracker project.</td>
+      </tr>
+    </table>
+
+    <h3>why use secure containers for serverless?</h3>
+    <p>
+      The paper is motivated by two specific requirements for developing a serverless
+      platform: concurrency and density. To understand why these requirements are important,
+      let's look at why you would even want to use secure containers for serverless.
+    </p>
+    <p>
+      Serverless is meant to reduce the friction and burden of server maintenance. A
+      developer using the platform only needs to upload their code and define when it
+      should run based on some receipt of an event. From a platform provider's point of view,
+      this is a security nightmare. Providers, by design, are allowing untrusted code to
+      execute on their managed machines.
+    </p>
+    <p>
+      It should be clear why containers themselves are useful in this environment. All the
+      niceties that we are used to still present themselves in a serverless environment:
+      encapsulation of dependencies, ease of deployment, reproduciblity, etc. However,
+      containers are not secure for one single reason; they share the host
+      operating system. This means that one exploit is all it takes to take control of the
+      machine.
+    </p>
+    <p>
+      Secure container runtimes provide the aforementioned niceties along with better
+      security through virtualization.
+    </p>
+
+    <h3>density + concurrency</h3>
+    <p>
+      Serverless function code is lightweight, so a single host should be able to run many
+      secure containers at a given time, with an assumption that container memory overhead is
+      low. Also, based on the nature of the workload, many containers should be able to get
+      spun up at the same time to handle a surge of demand. These requirements are informed
+      by production usage, which the authors (from Alibaba) mention.
+    </p>
+    <p>
+      The authors claim that existing secure container runtimes have trouble meeting density
+      and concurrency requirements for three reasons: rootfs creation overhead, hypervisor
+      memory overhead, and cgroups overhead. We'll get into each of these problems as well
+      as how RunD solves them.
+    </p>
+
+    <h3>rootfs</h3>
+    <p>
+      In terms of virtualization, most cloud providers turn to I/O passthrough for
+      performance, which is the process of bypassing the host kernel
+      (and sometimes the guest kernel) to expose physical devices directly to virtual
+      machines. Secure container runtimes are no exception, so they generally provision
+      the rootfs with I/O passthrough.
+    </p>
+    <p>
+      A container's rootfs is nothing more than its root filesystem. The main technologies
+      used for passthrough are
+      <a href="https://wiki.qemu.org/Documentation/9psetup">9pfs</a>,
+      <a href="https://virtio-fs.gitlab.io/">virtio-fs</a>, and
+      <a href="https://www.qemu.org/2021/01/19/virtio-blk-scsi-configuration/">
+        virtio-blk.</a> The authors benchmark the performance each of these technologies
+      to later determine which to use for their solution.
+    </p>
+    <p>
+      The authors find that 9pfs has poor performance likely because it uses a
+      network protocol that is not optimized for virtualization use cases. They also find
+      that virtio-blk struggles with concurrently starting around 200 containers
+      and virtio-fs struggles with high CPU usage when many containers are running due
+      to the requisite client daemon needed to support virtio-fs I/O. These problems are all
+      due to the creation of a rootfs during container creation.
+    </p>
+
+    <h3>RunD's rootfs overhead solution</h3>
+    <p>
+      Their solution to rootfs creation overhead is probably the one that is hardest for me
+      to understand. They generally reuse the idea of union mount filesystems which already
+      see use in most container implementations. Briefly, a union mount filesystem allows
+      the creation of a single mountpoint from many. Container runtimes on Linux like
+      containerd use OverlayFS. The filesystem presents a merged
+      filesystem to the container that is comprised of many read-only "lowerdirs" and one
+      writable "upperdir." (More detail on that
+      <a href="https://jvns.ca/blog/2019/11/18/how-containers-work--overlayfs/">here</a>).
+      Generally, in both secure container runtimes, both directories are backed by the same
+      passthrough technology. The novel idea from RunD is to provide the lowerdirs and
+      upperdirs with virtio-fs and virtio-blk respectively. These decisions are informed by
+      their benchmarking, which find that virtio-fs
+      (with <a href="https://docs.kernel.org/filesystems/dax.html">DAX</a>) has superior read
+      performance and virtio-blk has superior write performance.
+    </p>
+    <p>
+      Here is the confusing part. Serverless workloads do not require persistence. Therefore,
+      there is no reason for secure container's upperdirs to be backed by persistent storage
+      devices. To enable this, the authors seem to jump through a few hoops which I feel is
+      not necessary. First, they create a storage image template that is shared by all of
+      the container's upperdirs. Next, the sharing is done by using reflink to provide a
+      private CoW copy to each container. A volatile block device is then associated with
+      the copy and once the container opens it, <b>the reflinked copy is deleted</b>.
+      It is not clear how the copy can be deleted and what effect it really has beyond
+      saving memory. My assumption is that the deletion means that all writes happen
+      in-memory since the storage image is now gone, but that doesn't sound right
+      since they specifically mention the image is backed by a <b>volatile</b> block device;
+      writes would happen in memory anyway without the deletion.
+      So why do all of this to provide what is essentially an in memory storage device like a
+      RAM disk? I will assume that it is because virtio doesn't make something like RAM disk
+      passthrough easy, but really I am lacking background and context to be sure.
+    </p>
+    <p>
+      In any case, these improvements allow rootfs preparation at a much faster
+      speed: from 207ms to .2ms.
+    </p>
+
+    <h3>hypervisor memory overhead</h3>
+    <p>
+      Memory overhead contends with the density requirements for serverless platforms. The
+      less memory each container uses, the more containers can be packed on a host. The
+      authors define hypervisor memory overhead in the serverless context as all memory
+      used that is <b>not</b> user code. They find that memory overheads for a 128MB
+      container are 94MB and 168MB with FireCracker and QEMU variants of Kata, respectively.
+      They detail two extant optimizations for reducing hypervisor memory overhead: sharing
+      the text and rodata segments of the guest kernel among containers, and using a
+      templating system.
+    </p>
+    <p>
+      The ability to share kernel memory is due to the property of serverless workloads (and
+      containers in general) to represent the exact same running environment for user code.
+      It is also due to the concurrency property of serverless workloads, meaning that
+      multiple copies of containers with the same user code may be spun up to meet demand.
+    </p>
+    <p>
+      Templating is a system to presumably share more than just the text and rodata segments
+      of the kernel executable. An entire kernel image is shared across containers.
+    </p>
+    <p>
+      The authors note that these existing solutions are not sufficent due to
+      "self-modifying" code in the Linux kernel. I personally believe the authors may have
+      used incorrect verbiage here, since to me self-modifiable code refers to old assembly
+      language tricks to rewrite instructions during runtime. The authors seem to be
+      referring to the
+      <a href="https://github.com/torvalds/linux/blob/master/arch/x86/kernel/alternative.c">
+        alternatives </a> system in the Linux kernel, which detects CPU features at boot
+      and jumps to
+      <b>pre-defined</b> code that makes use of CPU-specific instructions among other
+      things. It may be pedantic, but the pre-defined nature of the code in the alternatives
+      system makes me think that text patching is a more appropriate term.
+    </p>
+    <p>
+      In any case, according to the authors the presence of text-patching in the
+      Linux kernel reduces the total amount of shareable code since each kernel presumably
+      is running different code. I take issue with this analysis however, which you will see
+      in the following section.
+    </p>
+
+    <h3>RunD's hypervisor memory overhead solution</h3>
+    <p>
+      In my opinion, this portion of the paper is the least interesting. The authors report
+      a total savings of 16MB and 4MB for the kernel memory footprint and image size
+      respectively. How did they accomplish this? By simply configuring the kernel and
+      disabling unused features. That's it. I'm really surprised they had not done this
+      already as it seems like low hanging fruit. I mean, I do this myself for my
+      desktop at home!
+    </p>
+    <p>
+      To alleivate the "self-modifying" code issue, they notice quite obviously that for
+      a given serverless environment, a node generally uses the same guest kernel for all
+      containers. Therefore, all containers' guest kernels will generate the same code
+      after boot. Rather than have each container suffer this startup penalty, the authors
+      created a template of a <b>post-boot</b> kernel to share. This means that previous
+      templates were only using pre-booted kernel images.
+    </p>
+    <p>
+      I guess my only issue with this is how glaringly obvious these solutions are, and am
+      not sure it should have been included in the paper. I may just be too harsh...
+    </p>
+
+    <h3>cgroups overhead</h3>
+    <p>
+      The final inefficiency the authors find is that of cgroups creation. They find that
+      concurrently starting many containers introduces slowdowns because the cgroups
+      subsystem uses non-scalable locks. They also find that the per entity load tracking
+      system in CFS also causes slowdowns because it iterates through all cgroups for
+      calculations.
+    </p>
+
+    <h3>RunD's cgroups overhead solution</h3>
+    <p>
+      The first solution is to pre-create a joint cgroup controller comprised of all the
+      resources that need to be restricted by the secure containers such as cpu, memory, and
+      blkio. While I am not yet familiar with the cgroups API in the Linux kernel, this
+      solution leads me to believe that the authors were using cgroupsv1, rather than
+      cgroupsv2. The cgroupsv1 API required a developer to attach a process to multiple
+      hierarchies associated with different controllers if they wanted to control multiple
+      resources. However, a large selling point of cgroupsv2 is that there is only one
+      unified hierarchy, so aggregation happens automatically with less overhead.
+    </p>
+    <p>
+      If I am understanding everything correctly, the problem they encounter with controller
+      aggregation overhead is automatically solved by moving to cgroupsv2.
+    </p>
+    <p>
+      Their solution to the concurrency startup problem is to simply have an already created
+      pool of cgroups and distribute them out to newly started containers, which I think is
+      simple and elegant. The particular implementation details are mostly left out, so its
+      not clear if they deal with any locking overheads in maintaining this structure.
+    </p>
+
+    <h3>final thoughts</h3>
+    <p>
+      The rest of the paper deals with evaluation (hint: they measured RunD to be faster).
+      The authors also mention their work is open source, although there is something to be
+      said about how they do it. They upstreamed their work into Kata Containers version 3.0,
+      which actually includes a completely rewritten runtime in Rust presumably also worked
+      on by the authors and other contributors. "runtime-rs" is still opt-in according to
+      the project's GitHub in the years the paper has been written, we of course don't know
+      if the Alibaba serverless platform still uses this variant of Kata. Overall the paper
+      was good, especially in pointing me to interesting keywords for further research like
+      virtio, union mount filesystems, and cgroups.
+    </p>
+  </div>
+  <!--#include virtual="/ssi/footer.html"-->
+</body>
+
+</html>
