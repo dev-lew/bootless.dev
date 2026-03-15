@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+
+<head>
+  <!--#include virtual="/ssi/head-preamble.html"  -->
+  <!--#include virtual="/ssi/highlight.html"-->
+
+  <link rel="stylesheet" href="/styles/modern-normalize.css">
+  <link rel="stylesheet" href="/styles/main.css">
+  <link rel="stylesheet" href="/styles/posts.css">
+</head>
+
+<body>
+  <!--#include virtual="/ssi/header.html"  -->
+  <h2>a gotcha in SQLModel</h2>
+  <div id="main">
+    <p>
+      <a href="https://sqlmodel.tiangolo.com/" SQLModel></a> is a Python library intended
+      to unify Pydantic and SQLAlchemy so you can write less boilerplate. I'm using it
+      in a <a href="https://fastapi.tiangolo.com/">FastAPI</a> backend for
+      a group project about frontend framework comparison. I don't typically write web
+      applications so I cannot speak to how effective it is at accomplishing its goal, but
+      the point of this post is to describe slightly surprising (intended) behavior about it.
+    </p>
+    <p>
+      I created the following model:
+    </p>
+    <pre><code>
+class Cart(SQLModel):
+    id_: UUID = Field(primary_key=True)
+    user_id: str | None = Field(default=None, foreign_key="users.id")
+    session_id: str | None
+
+
+    @model_validator(mode="after")
+    def check_at_least_one(self) -> Self:
+        if not (self.user_id or self.session_id):
+            raise ValueError("Either user_id or session_id must be set")
+
+        return self
+    </code></pre>
+    <p>
+      I wanted to check if my validator was working so I attempted to create a
+      <code>Cart</code> in the repl with two <code>None</code> fields. It worked. Why?
+      As another test I added an arbitrary string as the <code>id_</code> field instead
+      of a UUID. That worked too.
+    </p>
+    <p>
+      Isn't this the entire point of Pydantic? Well, turns out I was not alone in my
+      confusion. There is
+      <a href="https://github.com/fastapi/sqlmodel/issues/52" discussion></a> on this
+      behavior.
+    </p>
+    <p>
+      Turns out I missed a pretty important
+      <a href="https://sqlmodel.tiangolo.com/tutorial/fastapi/multiple-models/"></a>
+      section in the docs (which the author of library links in his response to the above
+      issue). I still succumb to RTFM sadly.
+    </p>
+    <p>
+      The solution is that SQLModel treats objects that interact with your database and
+      objects that should be validated separately, by using the table attribute.
+      So the solution for my validation woes was to create a separate object for validation
+      that FastAPI will use when creating things:
+    </p>
+    <pre><code>
+class Cart(SQLModel, table=True):
+    __tablename__ = "carts"
+
+    id_: UUID = Field(primary_key=True)
+    user_id: str | None = Field(default=None, foreign_key="users.id")
+    session_id: str | None
+
+
+class NewCart(SQLModel):
+    id_: UUID
+    user_id: str | None
+    session_id: str | None
+
+    @model_validator(mode="after")
+    def check_at_least_one(self) -> Self:
+        if not (self.user_id or self.session_id):
+            raise ValueError("Either user_id or session_id must be set")
+
+        return self
+    </code></pre>
+    <p>
+      A decent number of people have a problem with this (see the GitHub discussion) since
+      its code duplication and not too explicit in the documentation.
+      I personally would have expected the first example to be
+      validated, it isn't clear to me why you would ever want your db model to NOT be
+      validated. The author writes in the docs that this enables code reuse with inheritance
+      and whatnot, but to me it seems that this functionality should just be free.
+    </p>
+    <p>
+      I don't really have a stake in this since I'm building a toy project, but I don't think
+      its that big of a deal as some of the GitHub commenters are making it out to be.
+      Forking is always a possibility.
+    </p>
+  </div>
+  <!--#include virtual="/ssi/footer.html"-->
+</body>
+
+</html>
