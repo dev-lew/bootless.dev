@@ -114,20 +114,20 @@
       that virtio-blk struggles with concurrently starting around 200 containers
       and virtio-fs struggles with high CPU usage when many containers are running due
       to the requisite client daemon needed to support virtio-fs I/O. These problems are all
-      due to the creation of a rootfs during container creation.
+      due to the preparation of a rootfs during container creation.
     </p>
 
     <h3>RunD's rootfs overhead solution</h3>
     <p>
       Their solution to rootfs creation overhead is probably the one that is hardest for me
       to understand. They generally reuse the idea of union mount filesystems which already
-      see use in most container implementations. Briefly, a union mount filesystem allows
+      sees use in most container implementations. Briefly, a union mount filesystem allows
       the creation of a single mountpoint from many. Container runtimes on Linux like
       containerd use OverlayFS. The filesystem presents a merged
       filesystem to the container that is comprised of many read-only "lowerdirs" and one
       writable "upperdir." (More detail on that
       <a href="https://jvns.ca/blog/2019/11/18/how-containers-work--overlayfs/">here</a>).
-      Generally, in both secure container runtimes, both directories are backed by the same
+      Generally, in most secure container runtimes, both directories are backed by the same
       passthrough technology. The novel idea from RunD is to provide the lowerdirs and
       upperdirs with virtio-fs and virtio-blk respectively. These decisions are informed by
       their benchmarking, which find that virtio-fs
@@ -136,10 +136,10 @@
     </p>
     <p>
       Here is the confusing part. Serverless workloads do not require persistence. Therefore,
-      there is no reason for secure container's upperdirs to be backed by persistent storage
+      there is no reason for secure containers' upperdirs to be backed by persistent storage
       devices. To enable this, the authors seem to jump through a few hoops which I feel is
       not necessary. First, they create a storage image template that is shared by all of
-      the container's upperdirs. Next, the sharing is done by using reflink to provide a
+      the containers' upperdirs. Next, the sharing is done by using reflink to provide a
       private CoW copy to each container. A volatile block device is then associated with
       the copy and once the container opens it, <b>the reflinked copy is deleted</b>.
       It is not clear how the copy can be deleted and what effect it really has beyond
